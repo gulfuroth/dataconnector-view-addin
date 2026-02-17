@@ -159,7 +159,14 @@ def _dc_auth_header(database: str, user: str, password: str) -> str:
     return "Basic " + base64.b64encode(raw).decode("ascii")
 
 
-def _dc_query(base_url: str, auth_header: str, table: str, select_cols: List[str], filter_expr: Optional[str]) -> List[Dict]:
+def _dc_query(
+    base_url: str,
+    auth_header: str,
+    table: str,
+    select_cols: List[str],
+    filter_expr: Optional[str],
+    search_expr: Optional[str] = None,
+) -> List[Dict]:
     base = base_url.strip().rstrip("/")
     parsed_base = urlparse(base)
     dc_host = parsed_base.netloc or base
@@ -170,6 +177,8 @@ def _dc_query(base_url: str, auth_header: str, table: str, select_cols: List[str
     }
     if filter_expr:
         params["$filter"] = filter_expr
+    if search_expr:
+        params["$search"] = search_expr
 
     out: List[Dict] = []
     headers = {"Accept": "application/json", "Authorization": auth_header}
@@ -198,7 +207,14 @@ def _dc_query(base_url: str, auth_header: str, table: str, select_cols: List[str
     return out
 
 
-def _dc_query_with_fallback(base_url: str, auth_header: str, table: str, select_cols: List[str], filter_expr: Optional[str]) -> List[Dict]:
+def _dc_query_with_fallback(
+    base_url: str,
+    auth_header: str,
+    table: str,
+    select_cols: List[str],
+    filter_expr: Optional[str],
+    search_expr: Optional[str] = None,
+) -> List[Dict]:
     candidates = _dc_candidate_base_urls(base_url)
     if not candidates:
         raise HTTPException(status_code=400, detail="Invalid Data Connector base URL")
@@ -206,7 +222,7 @@ def _dc_query_with_fallback(base_url: str, auth_header: str, table: str, select_
     last_error: Optional[HTTPException] = None
     for idx, candidate in enumerate(candidates):
         try:
-            return _dc_query(candidate, auth_header, table, select_cols, filter_expr)
+            return _dc_query(candidate, auth_header, table, select_cols, filter_expr, search_expr)
         except HTTPException as exc:
             last_error = exc
             detail = str(exc.detail)
@@ -303,7 +319,8 @@ def query(inp: QueryInput):
     metric_col = METRIC_COLUMN[inp.metric]
     table = TABLE_BY_GRANULARITY[inp.granularity]
 
-    date_filter = f"DateTime ge {inp.from_date.isoformat()}T00:00:00Z and DateTime le {inp.to_date.isoformat()}T23:59:59Z"
+    # Data Connector supports date-range search pattern.
+    search_expr = f"from_{inp.from_date.isoformat()}_to_{inp.to_date.isoformat()}"
 
     metric_rows: List[Dict] = []
     metric_rows = _dc_query_with_fallback(
@@ -311,7 +328,8 @@ def query(inp: QueryInput):
         auth_header,
         table,
         ["DateTime", "SerialNo", metric_col],
-        date_filter,
+        None,
+        search_expr,
     )
 
     allowed_serial_set = set(_normalize_serials(allowed_serials)) if allowed_serials else None
