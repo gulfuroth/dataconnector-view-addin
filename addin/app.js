@@ -9,9 +9,6 @@ const refreshBtn = document.getElementById("refreshBtn");
 const exportBtn = document.getElementById("exportBtn");
 const connectBtn = document.getElementById("connectBtn");
 const rememberPasswordEl = document.getElementById("rememberPassword");
-const vehicleSelectEl = document.getElementById("vehicleSelect");
-const selAllBtn = document.getElementById("selAllBtn");
-const selNoneBtn = document.getElementById("selNoneBtn");
 const statusEl = document.getElementById("statusText");
 const chartEl = document.getElementById("chartPlaceholder");
 const tableHead = document.getElementById("dataTableHead");
@@ -29,6 +26,7 @@ const state = {
   connected: false,
   lastRows: [],
   lastPivot: null,
+  selectedVehicleKeys: new Set(),
 };
 
 function defaultDates() {
@@ -282,20 +280,9 @@ function buildVehicleIndex(rows) {
   });
 }
 
-function renderVehicleSelector(rows) {
-  const current = new Set(Array.from(vehicleSelectEl.selectedOptions).map((o) => o.value));
-  const vehicles = buildVehicleIndex(rows);
-  vehicleSelectEl.innerHTML = vehicles
-    .map((v) => `<option value="${v.key}">${v.device_name} | ${v.device_serial}</option>`)
-    .join("");
-  for (const option of vehicleSelectEl.options) {
-    if (current.has(option.value)) option.selected = true;
-  }
-}
-
 function renderPivotTable(rows) {
   if (!rows.length) {
-    tableHead.innerHTML = "<tr><th>Nombre vehículo</th><th>Serial</th></tr>";
+    tableHead.innerHTML = "<tr><th></th><th>Nombre vehículo</th><th>Serial</th></tr>";
     tableBody.innerHTML = "";
     state.lastPivot = { buckets: [], vehicles: [] };
     return;
@@ -327,6 +314,7 @@ function renderPivotTable(rows) {
 
   tableHead.innerHTML = `
     <tr>
+      <th><input id="selectAllVehicles" type="checkbox" /></th>
       <th>Nombre vehículo</th>
       <th>Serial</th>
       ${buckets.map((b) => `<th>${b}</th>`).join("")}
@@ -335,6 +323,7 @@ function renderPivotTable(rows) {
 
   tableBody.innerHTML = vehicles.map((v) => `
     <tr>
+      <td><input class="vehicle-check" type="checkbox" data-key="${v.key}" ${state.selectedVehicleKeys.has(v.key) ? "checked" : ""}></td>
       <td>${v.device_name}</td>
       <td>${v.device_serial}</td>
       ${buckets.map((b) => {
@@ -345,11 +334,15 @@ function renderPivotTable(rows) {
   `).join("");
 
   state.lastPivot = { buckets, vehicles };
+  const selectAll = document.getElementById("selectAllVehicles");
+  if (selectAll) {
+    selectAll.checked = vehicles.length > 0 && vehicles.every((v) => state.selectedVehicleKeys.has(v.key));
+  }
 }
 
 function refreshVisualsFromRows() {
   const rows = state.lastRows || [];
-  const selected = new Set(Array.from(vehicleSelectEl.selectedOptions).map((o) => o.value));
+  const selected = state.selectedVehicleKeys;
   const mode = chartAggModeEl.value;
 
   const { fullPoints, selectedPoints } = buildSeries(rows, mode, selected);
@@ -423,8 +416,10 @@ async function loadAndRender() {
 
   const data = await apiPost("/api/query", payload);
   state.lastRows = data.rows || [];
-
-  renderVehicleSelector(state.lastRows);
+  const availableKeys = new Set(buildVehicleIndex(state.lastRows).map((v) => v.key));
+  state.selectedVehicleKeys = new Set(
+    Array.from(state.selectedVehicleKeys).filter((k) => availableKeys.has(k)),
+  );
   refreshVisualsFromRows();
 }
 
@@ -453,13 +448,26 @@ exportBtn.addEventListener("click", () => {
 connectBtn.addEventListener("click", connect);
 rememberPasswordEl.addEventListener("change", handleRememberPasswordToggle);
 chartAggModeEl.addEventListener("change", refreshVisualsFromRows);
-vehicleSelectEl.addEventListener("change", refreshVisualsFromRows);
-selAllBtn.addEventListener("click", () => {
-  for (const o of vehicleSelectEl.options) o.selected = true;
+tableBody.addEventListener("change", (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (!t.classList.contains("vehicle-check")) return;
+  const key = t.dataset.key || "";
+  if (!key) return;
+  if (t.checked) state.selectedVehicleKeys.add(key);
+  else state.selectedVehicleKeys.delete(key);
   refreshVisualsFromRows();
 });
-selNoneBtn.addEventListener("click", () => {
-  for (const o of vehicleSelectEl.options) o.selected = false;
+tableHead.addEventListener("change", (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (t.id !== "selectAllVehicles") return;
+  const vehicles = state.lastPivot?.vehicles || [];
+  if (t.checked) {
+    state.selectedVehicleKeys = new Set(vehicles.map((v) => v.key));
+  } else {
+    state.selectedVehicleKeys.clear();
+  }
   refreshVisualsFromRows();
 });
 
