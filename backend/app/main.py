@@ -1,6 +1,7 @@
 import re
 from collections import defaultdict
 from datetime import date
+from urllib.parse import urlparse, urlunparse
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -160,6 +161,8 @@ def _dc_auth_header(database: str, user: str, password: str) -> str:
 
 def _dc_query(base_url: str, auth_header: str, table: str, select_cols: List[str], filter_expr: Optional[str]) -> List[Dict]:
     base = base_url.strip().rstrip("/")
+    parsed_base = urlparse(base)
+    dc_host = parsed_base.netloc or base
     url = f"{base}/{table}"
     params = {
         "$select": ",".join(select_cols),
@@ -178,7 +181,7 @@ def _dc_query(base_url: str, auth_header: str, table: str, select_cols: List[str
                 body = (res.text or "")[:300]
                 raise HTTPException(
                     status_code=502,
-                    detail=f"Data Connector HTTP {res.status_code} for table {table}: {body}",
+                    detail=f"Data Connector HTTP {res.status_code} on host {dc_host} for table {table}: {body}",
                 )
             payload = res.json()
         except HTTPException:
@@ -192,6 +195,45 @@ def _dc_query(base_url: str, auth_header: str, table: str, select_cols: List[str
         if len(out) >= 100000:
             break
 
+    return out
+
+
+def _dc_query_with_fallback(base_url: str, auth_header: str, table: str, select_cols: List[str], filter_expr: Optional[str]) -> List[Dict]:
+    candidates = _dc_candidate_base_urls(base_url)
+    if not candidates:
+        raise HTTPException(status_code=400, detail="Invalid Data Connector base URL")
+
+    last_error: Optional[HTTPException] = None
+    for idx, candidate in enumerate(candidates):
+        try:
+            return _dc_query(candidate, auth_header, table, select_cols, filter_expr)
+        except HTTPException as exc:
+            last_error = exc
+            detail = str(exc.detail)
+            # Retry on 403 once using alternate known host.
+            if exc.status_code == 502 and "HTTP 403" in detail and idx < len(candidates) - 1:
+                continue
+            raise
+
+    raise last_error or HTTPException(status_code=502, detail=f"Data Connector failed for all hosts on table {table}")
+
+
+def _dc_candidate_base_urls(base_url: str) -> List[str]:
+    base = (base_url or "").strip().rstrip("/")
+    if not base:
+        return []
+    parsed = urlparse(base)
+    host = parsed.netloc.lower()
+    out = [base]
+
+    if host == "odata-connector-1.geotab.com":
+        alt = urlunparse((parsed.scheme, "data-connector.geotab.com", parsed.path, "", "", ""))
+        if alt not in out:
+            out.append(alt.rstrip("/"))
+    elif host == "data-connector.geotab.com":
+        alt = urlunparse((parsed.scheme, "odata-connector-1.geotab.com", parsed.path, "", "", ""))
+        if alt not in out:
+            out.append(alt.rstrip("/"))
     return out
 
 
@@ -264,7 +306,7 @@ def query(inp: QueryInput):
     date_filter = f"DateTime ge {inp.from_date.isoformat()}T00:00:00Z and DateTime le {inp.to_date.isoformat()}T23:59:59Z"
 
     metric_rows: List[Dict] = []
-    metric_rows = _dc_query(
+    metric_rows = _dc_query_with_fallback(
         inp.dcBaseUrl,
         auth_header,
         table,
