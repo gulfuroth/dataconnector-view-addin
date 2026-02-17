@@ -1,0 +1,11 @@
+{
+  "name": "Data Connector View",
+  "version": "0.1.0",
+  "menuName": {
+    "en": "Data Connector View",
+    "es": "Vista Data Connector"
+  },
+  "path": "https://YOUR_ADDIN_HOST/addin/index.html",
+  "supportEmail": "you@example.com",
+  "icon": "https://YOUR_ADDIN_HOST/addin/icon.png"
+}

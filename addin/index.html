@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data Connector View Add-In</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>Data Connector View</h1>
+      <p>Historico agregado por flota o grupo</p>
+    </header>
+
+    <section class="filters">
+      <label>
+        Scope
+        <select id="scope">
+          <option value="fleet">Flota</option>
+          <option value="group">Grupo</option>
+        </select>
+      </label>
+
+      <label>
+        Grupo
+        <select id="groupId" disabled>
+          <option value="">Seleccione grupo</option>
+        </select>
+      </label>
+
+      <label>
+        Granularidad
+        <select id="granularity">
+          <option value="daily">Diaria</option>
+          <option value="monthly">Mensual</option>
+        </select>
+      </label>
+
+      <label>
+        Desde
+        <input id="from" type="date">
+      </label>
+
+      <label>
+        Hasta
+        <input id="to" type="date">
+      </label>
+
+      <button id="refreshBtn">Actualizar</button>
+    </section>
+
+    <section class="chart-box">
+      <h2>Evolucion</h2>
+      <div id="chartPlaceholder">[Chart placeholder]</div>
+    </section>
+
+    <section>
+      <h2>Tabla</h2>
+      <table id="dataTable">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Nombre vehiculo</th>
+            <th>Serial</th>
+            <th>Valor</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
