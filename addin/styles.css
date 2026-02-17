@@ -5,6 +5,7 @@
   --muted: #5c6b7a;
   --accent: #0f766e;
   --line: #d6dee8;
+  --error: #b91c1c;
 }
 
 * { box-sizing: border-box; }
@@ -21,14 +22,42 @@ body {
 }
 header h1 { margin: 0; }
 header p { margin-top: 6px; color: var(--muted); }
-.filters {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(120px, 1fr));
-  gap: 10px;
+.status {
+  margin-top: 8px;
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #def7ec;
+  color: #065f46;
+  font-size: 12px;
+  font-weight: 600;
+}
+.status.error {
+  background: #fee2e2;
+  color: var(--error);
+}
+.config-box,
+.filters,
+.chart-box,
+section {
+  margin-top: 14px;
   background: var(--panel);
-  padding: 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
+  padding: 12px;
+}
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 10px;
+}
+.config-actions {
+  margin-top: 10px;
+}
+.filters {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  gap: 10px;
 }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 select, input, button {
@@ -44,13 +73,6 @@ button {
   background: var(--accent);
   cursor: pointer;
 }
-.chart-box, section {
-  margin-top: 14px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 12px;
-}
 #chartPlaceholder {
   height: 260px;
   display: grid;
@@ -62,6 +84,11 @@ button {
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); font-size: 13px; }
 
-@media (max-width: 900px) {
-  .filters { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+@media (max-width: 1100px) {
+  .config-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+  .filters { grid-template-columns: repeat(3, minmax(120px, 1fr)); }
+}
+@media (max-width: 700px) {
+  .config-grid,
+  .filters { grid-template-columns: repeat(1, minmax(120px, 1fr)); }
 }

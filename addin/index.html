@@ -10,10 +10,46 @@
   <main class="container">
     <header>
       <h1>Data Connector View</h1>
-      <p>Historico agregado por flota o grupo</p>
+      <p>Modo frontend-only: lógica en JS/HTML (sin backend propio)</p>
+      <div id="statusText" class="status">Configura conexiones y pulsa Conectar</div>
     </header>
 
+    <section class="config-box">
+      <h2>Conexión</h2>
+      <div class="config-grid">
+        <label>MyGeotab Server
+          <input id="mygServer" type="text" placeholder="my.geotab.com" value="my.geotab.com">
+        </label>
+        <label>Database
+          <input id="mygDatabase" type="text" placeholder="database">
+        </label>
+        <label>Usuario
+          <input id="mygUser" type="text" placeholder="usuario">
+        </label>
+        <label>Password
+          <input id="mygPassword" type="password" placeholder="password">
+        </label>
+        <label>Data Connector Base URL
+          <input id="dcBaseUrl" type="text" placeholder="https://.../odata" >
+        </label>
+        <label>Data Connector Token
+          <input id="dcToken" type="password" placeholder="Bearer token">
+        </label>
+      </div>
+      <div class="config-actions">
+        <button id="connectBtn">Conectar</button>
+      </div>
+    </section>
+
     <section class="filters">
+      <label>
+        Dataset
+        <select id="metric">
+          <option value="distance">Kilómetros</option>
+          <option value="fuel">Combustible (L)</option>
+        </select>
+      </label>
+
       <label>
         Scope
         <select id="scope">
@@ -51,8 +87,8 @@
     </section>
 
     <section class="chart-box">
-      <h2>Evolucion</h2>
-      <div id="chartPlaceholder">[Chart placeholder]</div>
+      <h2>Evolución</h2>
+      <div id="chartPlaceholder">Sin datos</div>
     </section>
 
     <section>
@@ -61,7 +97,7 @@
         <thead>
           <tr>
             <th>Fecha</th>
-            <th>Nombre vehiculo</th>
+            <th>Nombre vehículo</th>
             <th>Serial</th>
             <th>Valor</th>
           </tr>

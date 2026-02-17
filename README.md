@@ -1,52 +1,29 @@
 # Data Connector View Add-In
 
-Add-In para MyGeotab orientado a visualizar historico agregado de Data Connector con foco en:
+Add-In de MyGeotab orientado a visualizar histórico agregado de Data Connector con lógica **100% en frontend (HTML/JS)**.
 
-- Un dataset a la vez (ej. kilometros o consumo).
-- Agregacion por flota completa o por grupo MyGeotab.
-- Granularidad diaria/mensual con zoom y navegacion temporal.
-- Grafica + tabla sincronizadas.
-- Identificacion de vehiculo por `name` y `serialNumber` (no ID interno).
+## Alcance MVP
 
-## Arquitectura
+- Un dataset por consulta (`distance` o `fuel`).
+- Agregación por `fleet` o por `group`.
+- Granularidad `daily` / `monthly`.
+- Gráfica de evolución + tabla.
+- Identificación por `DeviceName` + `SerialNo`.
 
-- `addin/`: frontend embebido en MyGeotab (UI filtros, grafica, tabla).
-- `backend/`: API para resolver grupos MyGeotab y consulta historica optimizada.
-- `docs/`: plan funcional, tecnico y roadmap.
+## Estructura
 
-## Estado
+- `addin/`: implementación principal frontend-only.
+- `docs/`: planificación y arquitectura.
+- `backend/`: scaffold opcional no requerido para el modo frontend-only.
 
-Base inicial y contratos API listos para implementar conexion real con:
+## Cómo usar (frontend-only)
 
-- MyGeotab API (grupos y metadatos de dispositivos)
-- Data Connector (dataset historico agregado)
+1. Servir estáticos de `addin/` en HTTPS (requerido para Add-In en producción).
+2. Abrir el Add-In e introducir:
+   - Credenciales MyGeotab (server, database, user, password)
+   - Base URL y token de Data Connector
+3. Conectar, elegir scope/grupo/granularidad/rango y actualizar.
 
-## Arranque rapido (backend)
+## Nota
 
-```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8080
-```
-
-Health:
-
-```bash
-curl http://127.0.0.1:8080/health
-```
-
-## Endpoints MVP
-
-- `GET /api/v1/groups`
-- `GET /api/v1/metrics/timeseries`
-- `GET /api/v1/metrics/table`
-- `GET /api/v1/metrics/export.csv`
-
-## Siguiente fase
-
-Implementar clientes reales en:
-
-- `backend/app/services/geotab_client.py`
-- `backend/app/services/data_connector_client.py`
+Este modo evita backend propio, pero expone credenciales en cliente. Para producción enterprise, suele recomendarse backend intermedio para seguridad y gobernanza.
