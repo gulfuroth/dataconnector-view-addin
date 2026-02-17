@@ -27,6 +27,7 @@ const mygDatabaseEl = document.getElementById("mygDatabase");
 const mygUserEl = document.getElementById("mygUser");
 const mygPasswordEl = document.getElementById("mygPassword");
 const dcBaseUrlEl = document.getElementById("dcBaseUrl");
+const DEFAULT_DC_BASE_URL = "https://data-connector.geotab.com/odata/v4/svc/";
 
 const state = {
   mygCredentials: null,
@@ -75,7 +76,7 @@ function loadConfig() {
     mygUserEl.value = cfg.mygUser || "";
     rememberPasswordEl.checked = !!cfg.rememberPassword;
     mygPasswordEl.value = cfg.rememberPassword ? (cfg.mygPassword || "") : "";
-    dcBaseUrlEl.value = cfg.dcBaseUrl || "";
+    dcBaseUrlEl.value = cfg.dcBaseUrl || DEFAULT_DC_BASE_URL;
   } catch (_err) {
     // ignore malformed local storage
   }
