@@ -1,3 +1,4 @@
+import re
 from collections import defaultdict
 from datetime import date
 from pathlib import Path
@@ -119,7 +120,7 @@ def _myg_device_serials_by_group(credentials: Dict, server: str, group_id: str) 
                     "search": search,
                 },
             )
-            serials = sorted({(d.get("serialNumber") or "").strip() for d in (result or []) if d.get("serialNumber")})
+            serials = _normalize_serials([(d.get("serialNumber") or "").strip() for d in (result or []) if d.get("serialNumber")])
             if serials:
                 return serials
         except HTTPException:
@@ -150,8 +151,15 @@ def _dc_query(base_url: str, auth_header: str, table: str, select_cols: List[str
     while url:
         try:
             res = requests.get(url, headers=headers, params=params, timeout=90)
-            res.raise_for_status()
+            if not res.ok:
+                body = (res.text or "")[:300]
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Data Connector HTTP {res.status_code} for table {table}: {body}",
+                )
             payload = res.json()
+        except HTTPException:
+            raise
         except requests.RequestException as exc:
             raise HTTPException(status_code=502, detail=f"Data Connector network error: {exc}") from exc
 
@@ -177,6 +185,20 @@ def _bucket(raw: str, granularity: str) -> str:
     if not raw:
         return ""
     return raw[:7] if granularity == "monthly" else raw[:10]
+
+
+def _normalize_serials(serials: List[str]) -> List[str]:
+    valid = []
+    for s in serials:
+        serial = (s or "").strip()
+        if not serial:
+            continue
+        if serial == "000-000-0000":
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9-]+", serial):
+            continue
+        valid.append(serial)
+    return sorted(set(valid))
 
 
 @app.get("/health")
@@ -220,7 +242,8 @@ def query(inp: QueryInput):
 
     metric_rows: List[Dict] = []
     if serials:
-        for serial_block in _chunk(serials, 40):
+        # Keep URL length moderate to avoid gateway/WAF limits on large $filter clauses.
+        for serial_block in _chunk(serials, 10):
             metric_rows.extend(
                 _dc_query(
                     inp.dcBaseUrl,
@@ -240,10 +263,11 @@ def query(inp: QueryInput):
         )
 
     serial_set = sorted({(r.get("SerialNo") or "").strip() for r in metric_rows if r.get("SerialNo")})
+    serial_set = _normalize_serials(serial_set)
 
     metadata_rows: List[Dict] = []
     if serial_set:
-        for serial_block in _chunk(serial_set, 40):
+        for serial_block in _chunk(serial_set, 10):
             metadata_rows.extend(
                 _dc_query(
                     inp.dcBaseUrl,
