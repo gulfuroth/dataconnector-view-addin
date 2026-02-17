@@ -128,6 +128,29 @@ def _myg_device_serials_by_group(credentials: Dict, server: str, group_id: str) 
     return []
 
 
+def _myg_device_name_map(credentials: Dict, server: str, serials: List[str]) -> Dict[str, str]:
+    wanted = set(_normalize_serials(serials))
+    if not wanted:
+        return {}
+
+    result = _myg_rpc(
+        server,
+        "Get",
+        {
+            "typeName": "Device",
+            "credentials": credentials,
+        },
+    )
+
+    out: Dict[str, str] = {}
+    for d in result or []:
+        serial = (d.get("serialNumber") or "").strip()
+        if not serial or serial not in wanted:
+            continue
+        out[serial] = (d.get("name") or serial).strip()
+    return out
+
+
 def _dc_auth_header(database: str, user: str, password: str) -> str:
     import base64
 
@@ -229,10 +252,10 @@ def query(inp: QueryInput):
     credentials = _myg_credentials(inp)
     auth_header = _dc_auth_header(inp.mygDatabase, inp.mygUser, inp.mygPassword)
 
-    serials: List[str] = []
+    allowed_serials: List[str] = []
     if inp.scope == "group":
-        serials = _myg_device_serials_by_group(credentials, inp.mygServer, inp.groupId or "")
-        if not serials:
+        allowed_serials = _myg_device_serials_by_group(credentials, inp.mygServer, inp.groupId or "")
+        if not allowed_serials:
             return {"rows": [], "points": []}
 
     metric_col = METRIC_COLUMN[inp.metric]
@@ -241,52 +264,23 @@ def query(inp: QueryInput):
     date_filter = f"DateTime ge {inp.from_date.isoformat()}T00:00:00Z and DateTime le {inp.to_date.isoformat()}T23:59:59Z"
 
     metric_rows: List[Dict] = []
-    if serials:
-        # Keep URL length moderate to avoid gateway/WAF limits on large $filter clauses.
-        for serial_block in _chunk(serials, 10):
-            metric_rows.extend(
-                _dc_query(
-                    inp.dcBaseUrl,
-                    auth_header,
-                    table,
-                    ["DateTime", "SerialNo", metric_col],
-                    f"{date_filter} and {_serial_filter(serial_block)}",
-                )
-            )
-    else:
-        metric_rows = _dc_query(
-            inp.dcBaseUrl,
-            auth_header,
-            table,
-            ["DateTime", "SerialNo", metric_col],
-            date_filter,
-        )
+    metric_rows = _dc_query(
+        inp.dcBaseUrl,
+        auth_header,
+        table,
+        ["DateTime", "SerialNo", metric_col],
+        date_filter,
+    )
 
-    serial_set = sorted({(r.get("SerialNo") or "").strip() for r in metric_rows if r.get("SerialNo")})
-    serial_set = _normalize_serials(serial_set)
+    allowed_serial_set = set(_normalize_serials(allowed_serials)) if allowed_serials else None
+    if allowed_serial_set is not None:
+        metric_rows = [
+            r for r in metric_rows
+            if (r.get("SerialNo") or "").strip() in allowed_serial_set
+        ]
 
-    metadata_rows: List[Dict] = []
-    if serial_set:
-        for serial_block in _chunk(serial_set, 10):
-            metadata_rows.extend(
-                _dc_query(
-                    inp.dcBaseUrl,
-                    auth_header,
-                    "LatestVehicleMetadata",
-                    ["SerialNo", "DeviceName", "DateTime"],
-                    _serial_filter(serial_block),
-                )
-            )
-
-    metadata: Dict[str, Dict] = {}
-    for m in metadata_rows:
-        serial = (m.get("SerialNo") or "").strip()
-        if not serial:
-            continue
-        dt = m.get("DateTime") or ""
-        prev = metadata.get(serial)
-        if prev is None or dt > prev["dt"]:
-            metadata[serial] = {"dt": dt, "name": (m.get("DeviceName") or serial).strip()}
+    serial_set = _normalize_serials([(r.get("SerialNo") or "").strip() for r in metric_rows if r.get("SerialNo")])
+    device_names = _myg_device_name_map(credentials, inp.mygServer, serial_set)
 
     rows: List[Dict] = []
     for r in metric_rows:
@@ -302,7 +296,7 @@ def query(inp: QueryInput):
         rows.append(
             {
                 "bucket": bucket,
-                "device_name": metadata.get(serial, {}).get("name", serial),
+                "device_name": device_names.get(serial, serial),
                 "device_serial": serial,
                 "value": float(value),
             }
