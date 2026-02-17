@@ -39,14 +39,19 @@ class QueryInput(ConnectionInput):
     to_date: date = Field(alias="to")
 
 
-METRIC_COLUMN = {
-    "distance": "Distance_Km",
-    "fuel": "FuelUsed_Litres",
+METRIC_CANDIDATES = {
+    "distance": ["GPS_Distance_Km", "Distance_Km"],
+    "fuel": ["TotalFuel_Litres", "FuelUsed_Litres"],
 }
 
 TABLE_BY_GRANULARITY = {
     "daily": "VehicleKpi_Daily",
     "monthly": "VehicleKpi_Monthly",
+}
+
+DATE_COLUMN_BY_GRANULARITY = {
+    "daily": "Local_Date",
+    "monthly": "Local_MonthStartDate",
 }
 
 
@@ -316,21 +321,39 @@ def query(inp: QueryInput):
         if not allowed_serials:
             return {"rows": [], "points": []}
 
-    metric_col = METRIC_COLUMN[inp.metric]
+    metric_candidates = METRIC_CANDIDATES[inp.metric]
+    date_col = DATE_COLUMN_BY_GRANULARITY[inp.granularity]
     table = TABLE_BY_GRANULARITY[inp.granularity]
 
     # Data Connector supports date-range search pattern.
     search_expr = f"from_{inp.from_date.isoformat()}_to_{inp.to_date.isoformat()}"
 
     metric_rows: List[Dict] = []
-    metric_rows = _dc_query_with_fallback(
-        inp.dcBaseUrl,
-        auth_header,
-        table,
-        ["DateTime", "SerialNo", metric_col],
-        None,
-        search_expr,
-    )
+    selected_metric_col: Optional[str] = None
+    last_metric_error: Optional[Exception] = None
+    for metric_col in metric_candidates:
+        try:
+            metric_rows = _dc_query_with_fallback(
+                inp.dcBaseUrl,
+                auth_header,
+                table,
+                [date_col, "SerialNo", metric_col],
+                None,
+                search_expr,
+            )
+            selected_metric_col = metric_col
+            break
+        except HTTPException as exc:
+            last_metric_error = exc
+            detail = str(exc.detail)
+            if exc.status_code == 502 and "Invalid Parameter" in detail:
+                continue
+            raise
+
+    if not selected_metric_col:
+        if last_metric_error:
+            raise last_metric_error
+        raise HTTPException(status_code=502, detail=f"No valid metric column found for {inp.metric}")
 
     allowed_serial_set = set(_normalize_serials(allowed_serials)) if allowed_serials else None
     if allowed_serial_set is not None:
@@ -347,10 +370,10 @@ def query(inp: QueryInput):
         serial = (r.get("SerialNo") or "").strip()
         if not serial:
             continue
-        value = r.get(metric_col)
+        value = r.get(selected_metric_col)
         if value is None:
             continue
-        bucket = _bucket(str(r.get("DateTime") or ""), inp.granularity)
+        bucket = _bucket(str(r.get(date_col) or ""), inp.granularity)
         if not bucket:
             continue
         rows.append(
