@@ -38,6 +38,7 @@ header p { margin-top: 6px; color: var(--muted); }
 }
 .config-box,
 .filters,
+.compare-box,
 .chart-box,
 section {
   margin-top: 14px;
@@ -70,7 +71,7 @@ section {
 }
 .filters {
   display: grid;
-  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  grid-template-columns: repeat(8, minmax(120px, 1fr));
   gap: 10px;
 }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
@@ -99,13 +100,32 @@ button.secondary {
   border: 1px dashed var(--line);
   border-radius: 8px;
 }
+.compare-box p {
+  margin: 6px 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.compare-controls {
+  display: grid;
+  grid-template-columns: 1fr 170px;
+  gap: 10px;
+}
+#vehicleSelect {
+  min-height: 140px;
+}
+.compare-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); font-size: 13px; }
 .table-scroll { overflow-x: auto; }
 
 @media (max-width: 1100px) {
   .config-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
-  .filters { grid-template-columns: repeat(3, minmax(120px, 1fr)); }
+  .filters { grid-template-columns: repeat(4, minmax(120px, 1fr)); }
+  .compare-controls { grid-template-columns: 1fr; }
 }
 @media (max-width: 700px) {
   .config-grid,

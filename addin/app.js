@@ -4,10 +4,14 @@ const groupEl = document.getElementById("groupId");
 const granularityEl = document.getElementById("granularity");
 const fromEl = document.getElementById("from");
 const toEl = document.getElementById("to");
+const chartAggModeEl = document.getElementById("chartAggMode");
 const refreshBtn = document.getElementById("refreshBtn");
 const exportBtn = document.getElementById("exportBtn");
 const connectBtn = document.getElementById("connectBtn");
 const rememberPasswordEl = document.getElementById("rememberPassword");
+const vehicleSelectEl = document.getElementById("vehicleSelect");
+const selAllBtn = document.getElementById("selAllBtn");
+const selNoneBtn = document.getElementById("selNoneBtn");
 const statusEl = document.getElementById("statusText");
 const chartEl = document.getElementById("chartPlaceholder");
 const tableHead = document.getElementById("dataTableHead");
@@ -24,6 +28,7 @@ const state = {
   groups: [],
   connected: false,
   lastRows: [],
+  lastPivot: null,
 };
 
 function defaultDates() {
@@ -106,19 +111,22 @@ function csvEscape(value) {
   return str;
 }
 
-function exportRowsToCsv() {
-  if (!state.lastRows.length) {
-    throw new Error("No hay datos para exportar");
+function exportPivotToCsv() {
+  if (!state.lastPivot || !state.lastPivot.vehicles.length) {
+    throw new Error("No hay tabla para exportar");
   }
-  const header = ["bucket", "device_name", "device_serial", "value"];
-  const lines = [header.join(",")];
-  for (const row of state.lastRows) {
-    lines.push([
-      csvEscape(row.bucket),
-      csvEscape(row.device_name),
-      csvEscape(row.device_serial),
-      csvEscape(Number(row.value).toFixed(2)),
-    ].join(","));
+
+  const { buckets, vehicles } = state.lastPivot;
+  const header = ["device_name", "device_serial", ...buckets];
+  const lines = [header.map(csvEscape).join(",")];
+
+  for (const v of vehicles) {
+    const row = [v.device_name, v.device_serial];
+    for (const b of buckets) {
+      const value = v.values.get(b);
+      row.push(value === undefined ? "" : Number(value).toFixed(2));
+    }
+    lines.push(row.map(csvEscape).join(","));
   }
 
   const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
@@ -126,63 +134,170 @@ function exportRowsToCsv() {
   const a = document.createElement("a");
   const stamp = new Date().toISOString().slice(0, 10);
   a.href = url;
-  a.download = `dataconnector_${metricEl.value}_${granularityEl.value}_${stamp}.csv`;
+  a.download = `datatable_${metricEl.value}_${granularityEl.value}_${stamp}.csv`;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
 }
 
-function renderChart(points) {
-  if (!points.length) {
+function formatAxisLabel(bucket) {
+  if (!bucket) return "";
+  if (/^\d{4}-\d{2}$/.test(bucket)) {
+    const [y, m] = bucket.split("-");
+    return `${m}/${y.slice(2)}`;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(bucket)) {
+    const [y, m, d] = bucket.split("-");
+    return `${d}/${m}`;
+  }
+  return bucket;
+}
+
+function buildSeries(rows, mode, selectedKeys) {
+  const fullMap = new Map();
+  const selectedMap = new Map();
+
+  for (const r of rows) {
+    const key = `${r.device_name}|||${r.device_serial}`;
+    const bucket = r.bucket;
+    const value = Number(r.value) || 0;
+
+    if (!fullMap.has(bucket)) fullMap.set(bucket, { sum: 0, count: 0 });
+    const full = fullMap.get(bucket);
+    full.sum += value;
+    full.count += 1;
+
+    if (selectedKeys && selectedKeys.size > 0 && selectedKeys.has(key)) {
+      if (!selectedMap.has(bucket)) selectedMap.set(bucket, { sum: 0, count: 0 });
+      const sel = selectedMap.get(bucket);
+      sel.sum += value;
+      sel.count += 1;
+    }
+  }
+
+  const toPoints = (m) => Array.from(m.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([bucket, acc]) => ({
+      bucket,
+      value: mode === "average" ? (acc.count ? acc.sum / acc.count : 0) : acc.sum,
+    }));
+
+  const fullPoints = toPoints(fullMap);
+  const selectedPoints = selectedKeys && selectedKeys.size > 0 ? toPoints(selectedMap) : [];
+
+  return { fullPoints, selectedPoints };
+}
+
+function renderChart(lines) {
+  const allPoints = lines.flatMap((l) => l.points);
+  if (!allPoints.length) {
     chartEl.textContent = "Sin datos para el filtro seleccionado";
     return;
   }
 
-  const width = 980;
-  const height = 260;
-  const pad = 34;
-  const values = points.map((p) => Number(p.value));
+  const width = 1020;
+  const height = 300;
+  const pad = 38;
+  const values = allPoints.map((p) => Number(p.value));
   const maxVal = Math.max(...values);
   const minVal = Math.min(...values);
   const span = Math.max(maxVal - minVal, 1);
 
-  const toX = (i) => pad + (i * (width - pad * 2)) / Math.max(points.length - 1, 1);
+  const buckets = lines[0].points.map((p) => p.bucket);
+  const idxMap = new Map(buckets.map((b, i) => [b, i]));
+
+  const toX = (bucket) => {
+    const i = idxMap.get(bucket) ?? 0;
+    return pad + (i * (width - pad * 2)) / Math.max(buckets.length - 1, 1);
+  };
   const toY = (v) => height - pad - ((v - minVal) / span) * (height - pad * 2);
 
-  const polyline = points
-    .map((p, i) => `${toX(i).toFixed(2)},${toY(Number(p.value)).toFixed(2)}`)
-    .join(" ");
-
-  const maxTicks = 6;
-  const step = Math.max(1, Math.floor((points.length - 1) / Math.max(1, maxTicks - 1)));
+  const maxTicks = 7;
+  const step = Math.max(1, Math.floor((buckets.length - 1) / Math.max(1, maxTicks - 1)));
   const tickIndexes = [];
-  for (let i = 0; i < points.length; i += step) tickIndexes.push(i);
-  if (tickIndexes[tickIndexes.length - 1] !== points.length - 1) tickIndexes.push(points.length - 1);
+  for (let i = 0; i < buckets.length; i += step) tickIndexes.push(i);
+  if (tickIndexes[tickIndexes.length - 1] !== buckets.length - 1) tickIndexes.push(buckets.length - 1);
 
   const tickMarks = tickIndexes.map((idx) => {
-    const x = toX(idx).toFixed(2);
-    const label = points[idx].bucket;
+    const bucket = buckets[idx];
+    const x = toX(bucket).toFixed(2);
     return `
       <line x1="${x}" y1="${height - pad}" x2="${x}" y2="${height - pad + 5}" stroke="#94a3b8" stroke-width="1" />
-      <text x="${x}" y="${height - 8}" text-anchor="middle" font-size="10" fill="#475569">${label}</text>
+      <text x="${x}" y="${height - 10}" text-anchor="middle" font-size="10" fill="#475569">${formatAxisLabel(bucket)}</text>
     `;
   }).join("");
+
+  const linePaths = lines.map((line) => {
+    const polyline = line.points
+      .map((p) => `${toX(p.bucket).toFixed(2)},${toY(Number(p.value)).toFixed(2)}`)
+      .join(" ");
+
+    const circles = line.points.map((p) => {
+      const x = toX(p.bucket).toFixed(2);
+      const y = toY(Number(p.value)).toFixed(2);
+      return `
+        <circle cx="${x}" cy="${y}" r="3.2" fill="${line.color}">
+          <title>${line.name}\n${p.bucket}: ${Number(p.value).toFixed(2)}</title>
+        </circle>
+      `;
+    }).join("");
+
+    return `
+      <polyline fill="none" stroke="${line.color}" stroke-width="2.5" points="${polyline}" />
+      ${circles}
+    `;
+  }).join("");
+
+  const legend = lines.map((line, idx) => `
+    <g transform="translate(${pad + idx * 180}, ${pad - 16})">
+      <rect x="0" y="-8" width="14" height="4" fill="${line.color}"></rect>
+      <text x="20" y="-4" font-size="11" fill="#334155">${line.name}</text>
+    </g>
+  `).join("");
 
   chartEl.innerHTML = `
     <svg viewBox="0 0 ${width} ${height}" width="100%" height="100%" role="img" aria-label="Evolución temporal">
       <line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" stroke="#94a3b8" stroke-width="1" />
       <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${height - pad}" stroke="#94a3b8" stroke-width="1" />
-      <polyline fill="none" stroke="#0f766e" stroke-width="2.5" points="${polyline}" />
       ${tickMarks}
+      ${linePaths}
+      ${legend}
     </svg>
   `;
+}
+
+function buildVehicleIndex(rows) {
+  const map = new Map();
+  for (const r of rows) {
+    const key = `${r.device_name}|||${r.device_serial}`;
+    if (!map.has(key)) {
+      map.set(key, { key, device_name: r.device_name, device_serial: r.device_serial });
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => {
+    const nameCmp = a.device_name.localeCompare(b.device_name);
+    if (nameCmp !== 0) return nameCmp;
+    return a.device_serial.localeCompare(b.device_serial);
+  });
+}
+
+function renderVehicleSelector(rows) {
+  const current = new Set(Array.from(vehicleSelectEl.selectedOptions).map((o) => o.value));
+  const vehicles = buildVehicleIndex(rows);
+  vehicleSelectEl.innerHTML = vehicles
+    .map((v) => `<option value="${v.key}">${v.device_name} | ${v.device_serial}</option>`)
+    .join("");
+  for (const option of vehicleSelectEl.options) {
+    if (current.has(option.value)) option.selected = true;
+  }
 }
 
 function renderPivotTable(rows) {
   if (!rows.length) {
     tableHead.innerHTML = "<tr><th>Nombre vehículo</th><th>Serial</th></tr>";
     tableBody.innerHTML = "";
+    state.lastPivot = { buckets: [], vehicles: [] };
     return;
   }
 
@@ -193,6 +308,7 @@ function renderPivotTable(rows) {
     const key = `${r.device_name}|||${r.device_serial}`;
     if (!byVehicle.has(key)) {
       byVehicle.set(key, {
+        key,
         device_name: r.device_name,
         device_serial: r.device_serial,
         values: new Map(),
@@ -227,6 +343,35 @@ function renderPivotTable(rows) {
       }).join("")}
     </tr>
   `).join("");
+
+  state.lastPivot = { buckets, vehicles };
+}
+
+function refreshVisualsFromRows() {
+  const rows = state.lastRows || [];
+  const selected = new Set(Array.from(vehicleSelectEl.selectedOptions).map((o) => o.value));
+  const mode = chartAggModeEl.value;
+
+  const { fullPoints, selectedPoints } = buildSeries(rows, mode, selected);
+  const lines = [
+    {
+      name: mode === "average" ? "Lista completa (promedio)" : "Lista completa (total)",
+      color: "#0f766e",
+      points: fullPoints,
+    },
+  ];
+  if (selectedPoints.length) {
+    lines.push({
+      name: mode === "average" ? "Seleccionados (promedio)" : "Seleccionados (total)",
+      color: "#2563eb",
+      points: selectedPoints,
+    });
+  }
+
+  renderChart(lines);
+  renderPivotTable(rows);
+
+  setStatus(`Datos cargados. Filas base: ${rows.length}. Seleccionados: ${selected.size}`);
 }
 
 async function apiPost(path, payload) {
@@ -277,15 +422,10 @@ async function loadAndRender() {
   };
 
   const data = await apiPost("/api/query", payload);
-  const rows = data.rows || [];
-  const points = data.points || [];
+  state.lastRows = data.rows || [];
 
-  renderChart(points);
-  state.lastRows = rows;
-
-  renderPivotTable(rows);
-
-  setStatus(`Datos cargados. Filas base: ${rows.length}`);
+  renderVehicleSelector(state.lastRows);
+  refreshVisualsFromRows();
 }
 
 scopeEl.addEventListener("change", () => {
@@ -304,14 +444,24 @@ refreshBtn.addEventListener("click", async () => {
 });
 exportBtn.addEventListener("click", () => {
   try {
-    exportRowsToCsv();
-    setStatus(`CSV exportado. Filas: ${state.lastRows.length}`);
+    exportPivotToCsv();
+    setStatus("Tabla exportada a CSV");
   } catch (err) {
     setStatus(err.message, true);
   }
 });
 connectBtn.addEventListener("click", connect);
 rememberPasswordEl.addEventListener("change", handleRememberPasswordToggle);
+chartAggModeEl.addEventListener("change", refreshVisualsFromRows);
+vehicleSelectEl.addEventListener("change", refreshVisualsFromRows);
+selAllBtn.addEventListener("click", () => {
+  for (const o of vehicleSelectEl.options) o.selected = true;
+  refreshVisualsFromRows();
+});
+selNoneBtn.addEventListener("click", () => {
+  for (const o of vehicleSelectEl.options) o.selected = false;
+  refreshVisualsFromRows();
+});
 
 loadConfig();
 defaultDates();

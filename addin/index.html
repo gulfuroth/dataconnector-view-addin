@@ -87,8 +87,28 @@
         <input id="to" type="date">
       </label>
 
+      <label>
+        Gráfico
+        <select id="chartAggMode">
+          <option value="total">Total</option>
+          <option value="average">Promedio</option>
+        </select>
+      </label>
+
       <button id="refreshBtn">Actualizar</button>
-      <button id="exportBtn" class="secondary">Export CSV</button>
+      <button id="exportBtn" class="secondary">Export Tabla CSV</button>
+    </section>
+
+    <section class="compare-box">
+      <h2>Comparación de Vehículos</h2>
+      <p>Selecciona vehículos para comparar su evolución contra el total de la lista.</p>
+      <div class="compare-controls">
+        <select id="vehicleSelect" multiple></select>
+        <div class="compare-actions">
+          <button id="selAllBtn" type="button" class="secondary">Seleccionar todo</button>
+          <button id="selNoneBtn" type="button" class="secondary">Limpiar selección</button>
+        </div>
+      </div>
     </section>
 
     <section class="chart-box">
