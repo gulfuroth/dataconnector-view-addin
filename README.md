@@ -47,3 +47,12 @@ Guía detallada: `docs/register-addin.md`
 ## Nota
 
 Este diseño evita el bloqueo CORS en llamadas directas de navegador a Data Connector.
+
+## Direct Browser Test (No Backend)
+
+Para validar si tu tenant permite llamadas directas sin proxy:
+
+- Abre `addin/standalone-direct-test.html`
+- Ejecuta el test con credenciales reales
+
+Si aparece error CORS (`No 'Access-Control-Allow-Origin'`), no será viable modo frontend-only para Data Connector en navegador.

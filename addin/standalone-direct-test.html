@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Direct MyGeotab + DC Connectivity Test</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f7f8fb; color: #111827; }
+    .card { background: #fff; border: 1px solid #dbe2ea; border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(200px, 1fr)); gap: 10px; }
+    label { display: flex; flex-direction: column; font-size: 13px; gap: 4px; }
+    input, select, button { padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; }
+    button { cursor: pointer; background: #0f766e; color: #fff; border-color: #0f766e; }
+    pre { background: #0b1020; color: #d1e4ff; border-radius: 8px; padding: 10px; overflow: auto; max-height: 360px; }
+    .ok { color: #065f46; }
+    .err { color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <h1>Direct Browser Connectivity Test</h1>
+  <p>This page tests direct browser calls (no backend proxy) to MyGeotab and Data Connector.</p>
+
+  <div class="card">
+    <div class="grid">
+      <label>MyGeotab Server<input id="mygServer" value="my.geotab.com"></label>
+      <label>Database<input id="mygDatabase" placeholder="database"></label>
+      <label>User (email)<input id="mygUser" placeholder="user@domain.com"></label>
+      <label>Password<input id="mygPassword" type="password"></label>
+      <label>DC Base URL<input id="dcBaseUrl" value="https://data-connector.geotab.com/odata/v4/svc/"></label>
+      <label>Metric<select id="metric"><option value="Distance_Km">Distance_Km</option><option value="FuelUsed_Litres">FuelUsed_Litres</option></select></label>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;">
+      <button id="btnTest">Run Direct Test</button>
+      <button id="btnClear" type="button">Clear</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <strong>Output</strong>
+    <pre id="out"></pre>
+  </div>
+
+<script>
+const out = document.getElementById('out');
+function log(line, cls='') {
+  const msg = cls ? `[${cls.toUpperCase()}] ${line}` : line;
+  out.textContent += msg + "\n";
+}
+
+function authHeader(database, user, password) {
+  const raw = `${database}/${user}:${password}`;
+  return 'Basic ' + btoa(unescape(encodeURIComponent(raw)));
+}
+
+async function mygRpc(server, method, params) {
+  const res = await fetch(`https://${server}/apiv1`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({method, params})
+  });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`MyGeotab HTTP ${res.status}`);
+  if (payload.error) throw new Error(payload.error.message || 'MyGeotab API error');
+  return payload.result;
+}
+
+async function dcGet(url, header) {
+  const res = await fetch(url, {headers: {Accept:'application/json', Authorization: header}});
+  const body = await res.text();
+  if (!res.ok) throw new Error(`DC HTTP ${res.status} :: ${body.slice(0,200)}`);
+  try { return JSON.parse(body); } catch { return {raw: body}; }
+}
+
+async function run() {
+  out.textContent = '';
+  const server = document.getElementById('mygServer').value.trim();
+  const database = document.getElementById('mygDatabase').value.trim();
+  const user = document.getElementById('mygUser').value.trim();
+  const password = document.getElementById('mygPassword').value;
+  const dcBase = document.getElementById('dcBaseUrl').value.trim().replace(/\/$/, '');
+  const metric = document.getElementById('metric').value;
+
+  if (!server || !database || !user || !password || !dcBase) {
+    log('Missing required input fields', 'err');
+    return;
+  }
+
+  log('1) Testing MyGeotab Authenticate...');
+  let credentials;
+  try {
+    const auth = await mygRpc(server, 'Authenticate', {database, userName: user, password});
+    credentials = auth.credentials || auth;
+    log('MyGeotab Authenticate OK', 'ok');
+  } catch (e) {
+    log(`MyGeotab failed: ${e.message}`, 'err');
+    return;
+  }
+
+  log('2) Testing MyGeotab Group list...');
+  try {
+    const groups = await mygRpc(server, 'Get', {typeName: 'Group', credentials});
+    log(`MyGeotab Group OK: ${Array.isArray(groups) ? groups.length : 0} groups`, 'ok');
+  } catch (e) {
+    log(`MyGeotab groups failed: ${e.message}`, 'err');
+  }
+
+  log('3) Testing Data Connector direct call...');
+  const h = authHeader(database, user, password);
+  const now = new Date();
+  const from = new Date(now); from.setDate(now.getDate() - 7);
+  const fromIso = from.toISOString().slice(0,10) + 'T00:00:00Z';
+  const toIso = now.toISOString().slice(0,10) + 'T23:59:59Z';
+  const filter = encodeURIComponent(`DateTime ge ${fromIso} and DateTime le ${toIso}`);
+  const url = `${dcBase}/VehicleKpi_Daily?$select=DateTime,SerialNo,${metric}&$top=5&$filter=${filter}`;
+
+  try {
+    const data = await dcGet(url, h);
+    const count = Array.isArray(data.value) ? data.value.length : 0;
+    log(`Data Connector direct OK: ${count} rows`, 'ok');
+  } catch (e) {
+    log(`Data Connector direct failed: ${e.message}`, 'err');
+    log('If error includes CORS/no Access-Control-Allow-Origin, direct browser mode is not feasible in your tenant.', 'err');
+  }
+}
+
+document.getElementById('btnTest').addEventListener('click', run);
+document.getElementById('btnClear').addEventListener('click', () => out.textContent = '');
+</script>
+</body>
+</html>
