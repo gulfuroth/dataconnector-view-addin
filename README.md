@@ -25,6 +25,7 @@ Add-In de MyGeotab orientado a visualizar histórico agregado de Data Connector 
 3. El Add-In usa automáticamente `database/usuario/password` para autenticar contra Data Connector (Basic Auth).
 4. Conectar, elegir scope/grupo/granularidad/rango y actualizar.
 5. Usar `Export CSV` para descargar la tabla filtrada actual.
+6. Si activas `Recordar password`, se guardará localmente en el navegador; si no, no se persiste.
 
 ## Registro del Add-In en MyGeotab
 

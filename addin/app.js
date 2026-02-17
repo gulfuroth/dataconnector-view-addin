@@ -17,6 +17,7 @@ const toEl = document.getElementById("to");
 const refreshBtn = document.getElementById("refreshBtn");
 const exportBtn = document.getElementById("exportBtn");
 const connectBtn = document.getElementById("connectBtn");
+const rememberPasswordEl = document.getElementById("rememberPassword");
 const statusEl = document.getElementById("statusText");
 const chartEl = document.getElementById("chartPlaceholder");
 const tableBody = document.querySelector("#dataTable tbody");
@@ -52,11 +53,13 @@ function toggleGroup() {
 }
 
 function saveConfig() {
+  const rememberPassword = !!rememberPasswordEl.checked;
   const payload = {
     mygServer: mygServerEl.value.trim(),
     mygDatabase: mygDatabaseEl.value.trim(),
     mygUser: mygUserEl.value.trim(),
-    mygPassword: mygPasswordEl.value,
+    mygPassword: rememberPassword ? mygPasswordEl.value : "",
+    rememberPassword,
     dcBaseUrl: dcBaseUrlEl.value.trim(),
   };
   localStorage.setItem("dcv_config", JSON.stringify(payload));
@@ -70,10 +73,26 @@ function loadConfig() {
     mygServerEl.value = cfg.mygServer || "my.geotab.com";
     mygDatabaseEl.value = cfg.mygDatabase || "";
     mygUserEl.value = cfg.mygUser || "";
-    mygPasswordEl.value = cfg.mygPassword || "";
+    rememberPasswordEl.checked = !!cfg.rememberPassword;
+    mygPasswordEl.value = cfg.rememberPassword ? (cfg.mygPassword || "") : "";
     dcBaseUrlEl.value = cfg.dcBaseUrl || "";
   } catch (_err) {
     // ignore malformed local storage
+  }
+}
+
+function handleRememberPasswordToggle() {
+  if (!rememberPasswordEl.checked) {
+    const raw = localStorage.getItem("dcv_config");
+    if (!raw) return;
+    try {
+      const cfg = JSON.parse(raw);
+      cfg.rememberPassword = false;
+      cfg.mygPassword = "";
+      localStorage.setItem("dcv_config", JSON.stringify(cfg));
+    } catch (_err) {
+      // ignore malformed local storage
+    }
   }
 }
 
@@ -395,6 +414,7 @@ exportBtn.addEventListener("click", () => {
   }
 });
 connectBtn.addEventListener("click", connect);
+rememberPasswordEl.addEventListener("change", handleRememberPasswordToggle);
 
 loadConfig();
 defaultDates();

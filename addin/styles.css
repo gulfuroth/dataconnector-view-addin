@@ -53,6 +53,20 @@ section {
 }
 .config-actions {
   margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.remember-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.remember-opt input {
+  width: 14px;
+  height: 14px;
 }
 .filters {
   display: grid;

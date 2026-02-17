@@ -47,6 +47,7 @@ Ejemplo mínimo:
 2. Rellena conexión MyGeotab + Data Connector.
    El acceso a Data Connector usa automáticamente `database/usuario/password` de MyGeotab.
 3. Pulsa `Conectar`.
+   Si no quieres persistir la contraseña en navegador, deja desactivado `Recordar password`.
 4. Selecciona `fleet` o `group` y rango temporal.
 5. Pulsa `Actualizar` y confirma gráfica + tabla.
 6. Pulsa `Export CSV` y valida el fichero descargado.
