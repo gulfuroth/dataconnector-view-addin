@@ -10,6 +10,7 @@ const connectBtn = document.getElementById("connectBtn");
 const rememberPasswordEl = document.getElementById("rememberPassword");
 const statusEl = document.getElementById("statusText");
 const chartEl = document.getElementById("chartPlaceholder");
+const tableHead = document.getElementById("dataTableHead");
 const tableBody = document.querySelector("#dataTable tbody");
 
 const mygServerEl = document.getElementById("mygServer");
@@ -140,7 +141,7 @@ function renderChart(points) {
 
   const width = 980;
   const height = 260;
-  const pad = 26;
+  const pad = 34;
   const values = points.map((p) => Number(p.value));
   const maxVal = Math.max(...values);
   const minVal = Math.min(...values);
@@ -153,13 +154,79 @@ function renderChart(points) {
     .map((p, i) => `${toX(i).toFixed(2)},${toY(Number(p.value)).toFixed(2)}`)
     .join(" ");
 
+  const maxTicks = 6;
+  const step = Math.max(1, Math.floor((points.length - 1) / Math.max(1, maxTicks - 1)));
+  const tickIndexes = [];
+  for (let i = 0; i < points.length; i += step) tickIndexes.push(i);
+  if (tickIndexes[tickIndexes.length - 1] !== points.length - 1) tickIndexes.push(points.length - 1);
+
+  const tickMarks = tickIndexes.map((idx) => {
+    const x = toX(idx).toFixed(2);
+    const label = points[idx].bucket;
+    return `
+      <line x1="${x}" y1="${height - pad}" x2="${x}" y2="${height - pad + 5}" stroke="#94a3b8" stroke-width="1" />
+      <text x="${x}" y="${height - 8}" text-anchor="middle" font-size="10" fill="#475569">${label}</text>
+    `;
+  }).join("");
+
   chartEl.innerHTML = `
     <svg viewBox="0 0 ${width} ${height}" width="100%" height="100%" role="img" aria-label="Evolución temporal">
       <line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" stroke="#94a3b8" stroke-width="1" />
       <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${height - pad}" stroke="#94a3b8" stroke-width="1" />
       <polyline fill="none" stroke="#0f766e" stroke-width="2.5" points="${polyline}" />
+      ${tickMarks}
     </svg>
   `;
+}
+
+function renderPivotTable(rows) {
+  if (!rows.length) {
+    tableHead.innerHTML = "<tr><th>Nombre vehículo</th><th>Serial</th></tr>";
+    tableBody.innerHTML = "";
+    return;
+  }
+
+  const buckets = Array.from(new Set(rows.map((r) => r.bucket))).sort((a, b) => a.localeCompare(b));
+  const byVehicle = new Map();
+
+  for (const r of rows) {
+    const key = `${r.device_name}|||${r.device_serial}`;
+    if (!byVehicle.has(key)) {
+      byVehicle.set(key, {
+        device_name: r.device_name,
+        device_serial: r.device_serial,
+        values: new Map(),
+      });
+    }
+    const entry = byVehicle.get(key);
+    const prev = entry.values.get(r.bucket) || 0;
+    entry.values.set(r.bucket, prev + Number(r.value));
+  }
+
+  const vehicles = Array.from(byVehicle.values()).sort((a, b) => {
+    const nameCmp = a.device_name.localeCompare(b.device_name);
+    if (nameCmp !== 0) return nameCmp;
+    return a.device_serial.localeCompare(b.device_serial);
+  });
+
+  tableHead.innerHTML = `
+    <tr>
+      <th>Nombre vehículo</th>
+      <th>Serial</th>
+      ${buckets.map((b) => `<th>${b}</th>`).join("")}
+    </tr>
+  `;
+
+  tableBody.innerHTML = vehicles.map((v) => `
+    <tr>
+      <td>${v.device_name}</td>
+      <td>${v.device_serial}</td>
+      ${buckets.map((b) => {
+        const value = v.values.get(b);
+        return `<td>${value === undefined ? "-" : Number(value).toFixed(2)}</td>`;
+      }).join("")}
+    </tr>
+  `).join("");
 }
 
 async function apiPost(path, payload) {
@@ -216,16 +283,9 @@ async function loadAndRender() {
   renderChart(points);
   state.lastRows = rows;
 
-  tableBody.innerHTML = rows.slice(0, 500).map((r) => `
-    <tr>
-      <td>${r.bucket}</td>
-      <td>${r.device_name}</td>
-      <td>${r.device_serial}</td>
-      <td>${Number(r.value).toFixed(2)}</td>
-    </tr>
-  `).join("");
+  renderPivotTable(rows);
 
-  setStatus(`Datos cargados. Filas: ${rows.length}${rows.length > 500 ? " (mostrando 500)" : ""}`);
+  setStatus(`Datos cargados. Filas base: ${rows.length}`);
 }
 
 scopeEl.addEventListener("change", () => {

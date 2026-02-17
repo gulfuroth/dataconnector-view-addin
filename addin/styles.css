@@ -101,6 +101,7 @@ button.secondary {
 }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.table-scroll { overflow-x: auto; }
 
 @media (max-width: 1100px) {
   .config-grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
