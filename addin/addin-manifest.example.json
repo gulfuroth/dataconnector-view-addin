@@ -7,5 +7,5 @@
   },
   "path": "https://YOUR_ADDIN_HOST/addin/index.html",
   "supportEmail": "you@example.com",
-  "icon": "https://YOUR_ADDIN_HOST/addin/icon.png"
+  "icon": "https://YOUR_ADDIN_HOST/addin/icon.svg"
 }

@@ -3,8 +3,9 @@
 ## Prerrequisitos
 
 1. URL pública HTTPS que sirva `addin/index.html` y sus assets.
-2. Usuario con permisos de administración de Add-Ins en MyGeotab.
-3. Manifest completado desde `addin/addin-manifest.example.json`.
+2. Backend API desplegado y accesible para el add-in (mismo dominio recomendado).
+3. Usuario con permisos de administración de Add-Ins en MyGeotab.
+4. Manifest completado desde `addin/addin-manifest.example.json`.
 
 ## Manifest ejemplo
 
@@ -45,15 +46,14 @@ Ejemplo mínimo:
 
 1. Abre el Add-In.
 2. Rellena conexión MyGeotab + Data Connector.
-   El acceso a Data Connector usa automáticamente `database/usuario/password` de MyGeotab.
+   El backend usa automáticamente `database/usuario/password` de MyGeotab para Data Connector.
 3. Pulsa `Conectar`.
    Si no quieres persistir la contraseña en navegador, deja desactivado `Recordar password`.
 4. Selecciona `fleet` o `group` y rango temporal.
 5. Pulsa `Actualizar` y confirma gráfica + tabla.
 6. Pulsa `Export CSV` y valida el fichero descargado.
 
-## Limitaciones del modo frontend-only
+## Notas
 
-1. Credenciales viven en cliente.
-2. Puede haber restricciones CORS según cómo expongas Data Connector/MyGeotab.
-3. Para entornos enterprise se recomienda backend intermedio para seguridad y trazabilidad.
+1. El backend elimina el bloqueo CORS de consultas a Data Connector.
+2. El icono del add-in debe ser SVG accesible por URL pública.

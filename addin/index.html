@@ -16,7 +16,7 @@
 
     <section class="config-box">
       <h2>Conexión</h2>
-      <div class="config-grid">
+      <form class="config-grid" onsubmit="return false;">
         <label>MyGeotab Server
           <input id="mygServer" type="text" placeholder="my.geotab.com" value="my.geotab.com">
         </label>
@@ -35,9 +35,9 @@
         <label>Auth Data Connector
           <input type="text" value="Usa database/usuario/password de MyGeotab" disabled>
         </label>
-      </div>
+      </form>
       <div class="config-actions">
-        <button id="connectBtn">Conectar</button>
+        <button id="connectBtn" type="button">Conectar</button>
         <label class="remember-opt">
           <input id="rememberPassword" type="checkbox">
           Recordar password en este navegador

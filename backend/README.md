@@ -1,6 +1,6 @@
-# Backend API
+# Backend API (Proxy)
 
-FastAPI service para servir datos al Add-In.
+FastAPI service que actúa como proxy para llamadas a MyGeotab y Data Connector.
 
 ## Run
 
@@ -11,8 +11,14 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8080
 ```
 
-## Implementacion pendiente
+## Endpoints
 
-1. `GeotabClient` real para grupos/dispositivos.
-2. `DataConnectorClient` real para dataset historico.
-3. Persistencia/cache para consultas grandes.
+1. `GET /health`
+2. `POST /api/connect`
+3. `POST /api/query`
+
+## Nota
+
+Si sirves el add-in con este mismo backend, puedes abrir:
+
+- `http://127.0.0.1:8080/addin/index.html`
