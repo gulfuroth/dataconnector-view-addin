@@ -21,9 +21,10 @@ Add-In de MyGeotab orientado a visualizar histórico agregado de Data Connector 
 1. Servir estáticos de `addin/` en HTTPS (requerido para Add-In en producción).
 2. Abrir el Add-In e introducir:
    - Credenciales MyGeotab (server, database, user, password)
-   - Base URL y token de Data Connector
-3. Conectar, elegir scope/grupo/granularidad/rango y actualizar.
-4. Usar `Export CSV` para descargar la tabla filtrada actual.
+   - Base URL de Data Connector
+3. El Add-In usa automáticamente `database/usuario/password` para autenticar contra Data Connector (Basic Auth).
+4. Conectar, elegir scope/grupo/granularidad/rango y actualizar.
+5. Usar `Export CSV` para descargar la tabla filtrada actual.
 
 ## Registro del Add-In en MyGeotab
 

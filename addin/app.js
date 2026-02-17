@@ -26,7 +26,6 @@ const mygDatabaseEl = document.getElementById("mygDatabase");
 const mygUserEl = document.getElementById("mygUser");
 const mygPasswordEl = document.getElementById("mygPassword");
 const dcBaseUrlEl = document.getElementById("dcBaseUrl");
-const dcTokenEl = document.getElementById("dcToken");
 
 const state = {
   mygCredentials: null,
@@ -57,8 +56,8 @@ function saveConfig() {
     mygServer: mygServerEl.value.trim(),
     mygDatabase: mygDatabaseEl.value.trim(),
     mygUser: mygUserEl.value.trim(),
+    mygPassword: mygPasswordEl.value,
     dcBaseUrl: dcBaseUrlEl.value.trim(),
-    dcToken: dcTokenEl.value,
   };
   localStorage.setItem("dcv_config", JSON.stringify(payload));
 }
@@ -71,8 +70,8 @@ function loadConfig() {
     mygServerEl.value = cfg.mygServer || "my.geotab.com";
     mygDatabaseEl.value = cfg.mygDatabase || "";
     mygUserEl.value = cfg.mygUser || "";
+    mygPasswordEl.value = cfg.mygPassword || "";
     dcBaseUrlEl.value = cfg.dcBaseUrl || "";
-    dcTokenEl.value = cfg.dcToken || "";
   } catch (_err) {
     // ignore malformed local storage
   }
@@ -149,10 +148,22 @@ async function mygListDeviceSerialsByGroup(groupId) {
 
 async function dcQuery(table, selectCols, filterExpr) {
   const baseUrl = dcBaseUrlEl.value.trim().replace(/\/$/, "");
-  const token = dcTokenEl.value;
-  if (!baseUrl || !token) {
-    throw new Error("Falta Data Connector Base URL o Token");
+  const database = mygDatabaseEl.value.trim();
+  const user = mygUserEl.value.trim();
+  const password = mygPasswordEl.value;
+  if (!baseUrl) {
+    throw new Error("Falta Data Connector Base URL");
   }
+  if (!database || !user || !password) {
+    throw new Error("Faltan database/usuario/password para Data Connector");
+  }
+
+  const dcUser = `${database}/${user}`;
+  const raw = `${dcUser}:${password}`;
+  const utf8 = new TextEncoder().encode(raw);
+  let binary = "";
+  for (const b of utf8) binary += String.fromCharCode(b);
+  const authHeader = `Basic ${btoa(binary)}`;
 
   let url = `${baseUrl}/${table}`;
   let params = new URLSearchParams({
@@ -167,7 +178,7 @@ async function dcQuery(table, selectCols, filterExpr) {
     const res = await fetch(reqUrl, {
       headers: {
         Accept: "application/json",
-        Authorization: `Bearer ${token}`,
+        Authorization: authHeader,
       },
     });
     if (!res.ok) throw new Error(`Data Connector HTTP ${res.status}`);

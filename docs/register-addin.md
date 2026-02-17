@@ -45,6 +45,7 @@ Ejemplo mínimo:
 
 1. Abre el Add-In.
 2. Rellena conexión MyGeotab + Data Connector.
+   El acceso a Data Connector usa automáticamente `database/usuario/password` de MyGeotab.
 3. Pulsa `Conectar`.
 4. Selecciona `fleet` o `group` y rango temporal.
 5. Pulsa `Actualizar` y confirma gráfica + tabla.
@@ -52,6 +53,6 @@ Ejemplo mínimo:
 
 ## Limitaciones del modo frontend-only
 
-1. Credenciales y tokens viven en cliente.
+1. Credenciales viven en cliente.
 2. Puede haber restricciones CORS según cómo expongas Data Connector/MyGeotab.
 3. Para entornos enterprise se recomienda backend intermedio para seguridad y trazabilidad.
