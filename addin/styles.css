@@ -73,6 +73,10 @@ button {
   background: var(--accent);
   cursor: pointer;
 }
+button.secondary {
+  color: var(--accent);
+  background: #fff;
+}
 #chartPlaceholder {
   height: 260px;
   display: grid;

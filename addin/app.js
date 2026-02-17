@@ -15,6 +15,7 @@ const granularityEl = document.getElementById("granularity");
 const fromEl = document.getElementById("from");
 const toEl = document.getElementById("to");
 const refreshBtn = document.getElementById("refreshBtn");
+const exportBtn = document.getElementById("exportBtn");
 const connectBtn = document.getElementById("connectBtn");
 const statusEl = document.getElementById("statusText");
 const chartEl = document.getElementById("chartPlaceholder");
@@ -31,6 +32,7 @@ const state = {
   mygCredentials: null,
   groups: [],
   connected: false,
+  lastRows: [],
 };
 
 function defaultDates() {
@@ -235,6 +237,41 @@ function aggregateTimeseries(rows) {
     .map(([bucket, value]) => ({ bucket, value }));
 }
 
+function csvEscape(value) {
+  const str = String(value ?? "");
+  if (str.includes("\"") || str.includes(",") || str.includes("\n")) {
+    return `"${str.replace(/"/g, "\"\"")}"`;
+  }
+  return str;
+}
+
+function exportRowsToCsv() {
+  if (!state.lastRows.length) {
+    throw new Error("No hay datos para exportar");
+  }
+  const header = ["bucket", "device_name", "device_serial", "value"];
+  const lines = [header.join(",")];
+  for (const row of state.lastRows) {
+    lines.push([
+      csvEscape(row.bucket),
+      csvEscape(row.device_name),
+      csvEscape(row.device_serial),
+      csvEscape(Number(row.value).toFixed(2)),
+    ].join(","));
+  }
+
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `dataconnector_${metricEl.value}_${granularityEl.value}_${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 async function loadAndRender() {
   if (!state.connected) throw new Error("Conecta primero");
 
@@ -299,6 +336,7 @@ async function loadAndRender() {
 
   const points = aggregateTimeseries(rows);
   renderChart(points);
+  state.lastRows = rows;
 
   tableBody.innerHTML = rows.slice(0, 500).map((r) => `
     <tr>
@@ -333,6 +371,14 @@ refreshBtn.addEventListener("click", async () => {
   try {
     setStatus("Consultando...");
     await loadAndRender();
+  } catch (err) {
+    setStatus(err.message, true);
+  }
+});
+exportBtn.addEventListener("click", () => {
+  try {
+    exportRowsToCsv();
+    setStatus(`CSV exportado. Filas: ${state.lastRows.length}`);
   } catch (err) {
     setStatus(err.message, true);
   }
