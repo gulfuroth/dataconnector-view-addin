@@ -157,6 +157,36 @@ def _myg_device_name_map(credentials: Dict, server: str, serials: List[str]) -> 
     return out
 
 
+def _dc_device_serials_by_group(base_url: str, auth_header: str, group_id: str) -> List[str]:
+    group_escaped = (group_id or "").replace("'", "''")
+    table_candidates = ["DeviceGroups", "CurrentDeviceGroups"]
+    group_col_candidates = ["GroupId", "GroupID", "Group"]
+    serial_col_candidates = ["SerialNo", "SerialNumber", "DeviceSerialNo"]
+
+    for table in table_candidates:
+        for group_col in group_col_candidates:
+            for serial_col in serial_col_candidates:
+                try:
+                    rows = _dc_query_with_fallback(
+                        base_url,
+                        auth_header,
+                        table,
+                        [group_col, serial_col],
+                        f"{group_col} eq '{group_escaped}'",
+                        None,
+                    )
+                    serials = _normalize_serials([(r.get(serial_col) or "").strip() for r in rows if r.get(serial_col)])
+                    if serials:
+                        return serials
+                except HTTPException as exc:
+                    detail = str(exc.detail)
+                    # Keep probing known table/column combinations.
+                    if exc.status_code == 502 and ("Invalid Parameter" in detail or "table" in detail.lower()):
+                        continue
+                    continue
+    return []
+
+
 def _dc_auth_header(database: str, user: str, password: str) -> str:
     import base64
 
@@ -317,7 +347,11 @@ def query(inp: QueryInput):
 
     allowed_serials: List[str] = []
     if inp.scope == "group":
-        allowed_serials = _myg_device_serials_by_group(credentials, inp.mygServer, inp.groupId or "")
+        # First try Data Connector DeviceGroups mapping (planned v1 enhancement).
+        allowed_serials = _dc_device_serials_by_group(inp.dcBaseUrl, auth_header, inp.groupId or "")
+        # Fallback to MyGeotab group lookup if DC mapping is unavailable for this tenant.
+        if not allowed_serials:
+            allowed_serials = _myg_device_serials_by_group(credentials, inp.mygServer, inp.groupId or "")
         if not allowed_serials:
             return {"rows": [], "points": []}
 
